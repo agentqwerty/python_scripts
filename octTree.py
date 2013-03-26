@@ -17,7 +17,7 @@ class OctTree(object):
         self.bp_min = bounding_point_min
         self.nodes = [OctTreeNode(self.bp_min, self.bp_max, dl=0, parent=self)]
 
-    def subdivide_node(node):
+    def subdivide_node(self, node):
         """
         Divides an OctTreeNode into 8 octants. The subdivided node is replaced
         in the nodelist by the octants.
@@ -35,43 +35,35 @@ class OctTree(object):
 
         oct_1_min = node.bp_min
         oct_1_max = (half_x, half_y, half_z)
-        octant_list.append(OctTreeNode(oct_1_min, oct_1_max, dl=divison_level,
-            parent=self))
+        octant_list.append(OctTreeNode(oct_1_min, oct_1_max, dl=dl, parent=self))
 
         oct_2_min = (half_x, min_y, min_z)
         oct_2_max = (max_x, half_y, half_z)
-        octant_list.append(OctTreeNode(oct_2_min, oct_2_max, dl=division_level,
-            parent=self))
+        octant_list.append(OctTreeNode(oct_2_min, oct_2_max, dl=dl, parent=self))
 
         oct_3_min = (min_x, min_y, half_z)
         oct_3_max = (half_x, half_y, max_z)
-        octant_list.append(OctTreeNode(oct_3_min, oct_3_max, dl=division_level,
-            parent=self))
+        octant_list.append(OctTreeNode(oct_3_min, oct_3_max, dl=dl, parent=self))
 
         oct_4_min = (half_x, min_y, half_z)
         oct_4_max = (max_x, half_y, max_z)
-        octant_list.append(OctTreeNode(oct_4_min, oct_4_max, dl=division_level,
-            parent=self))
+        octant_list.append(OctTreeNode(oct_4_min, oct_4_max, dl=dl, parent=self))
 
         oct_5_min = (min_x, half_y, min_z)
         oct_5_max = (half_x, max_y, half_z)
-        octant_list.append(OctTreeNode(oct_5_min, oct_5_max, dl=division_level,
-            parent=self))
+        octant_list.append(OctTreeNode(oct_5_min, oct_5_max, dl=dl, parent=self))
 
         oct_6_min = (half_x, half_y, min_z)
         oct_6_max = (max_x, max_y, half_z)
-        octant_list.append(OctTreeNode(oct_6_min, oct_6_max, dl=division_level, 
-            parent=self))
+        octant_list.append(OctTreeNode(oct_6_min, oct_6_max, dl=dl, parent=self))
 
         oct_7_min = (min_x, half_y, half_z)
         oct_7_max = (half_x, max_y, max_z)
-        octant_list.append(OctTreeNode(oct_7_min, oct_7_max, dl=division_level,
-            parent=self))
+        octant_list.append(OctTreeNode(oct_7_min, oct_7_max, dl=dl, parent=self))
 
         oct_8_min = (half_x, half_y, half_z)
         oct_8_max = node.bp_max
-        octant_list.append(OctTreeNode(oct_8_min, oct_8_max, dl=division_level,
-            parent=self))
+        octant_list.append(OctTreeNode(oct_8_min, oct_8_max, dl=dl, parent=self))
 
         # Remove the original node and add the octants
         self.nodes.remove(node)
@@ -97,7 +89,7 @@ class OctTreeNode(object):
         self.parent = parent
         self.division_level = dl
 
-    def is_inside(point):
+    def is_inside(self, point):
         """
         Returns True if the given point lies inside this OctTreeNode, False
         otherwise.
