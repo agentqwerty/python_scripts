@@ -49,7 +49,7 @@ class OctTreeNode(object):
         half_z = (max_z+min_z)/2.0
         return (half_x, half_y, half_z)
 
-    def node_containing(self, point):
+    def child_containing(self, point):
         """
         Returns the child node containing the given point.
         point: (x,y,z)
