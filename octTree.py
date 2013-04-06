@@ -91,7 +91,7 @@ class OctTreeNode(object):
         min_x, min_y, min_z = self.bp_min
         half_x, half_y, half_z = self.half_values
 
-        oct_0_min = node.bp_min #000
+        oct_0_min = self.bp_min #000
         oct_0_max = (half_x, half_y, half_z)
         octant_list.append(OctTreeNode(oct_0_min, oct_0_max, dl=dl, parent=self))
 
@@ -120,7 +120,7 @@ class OctTreeNode(object):
         octant_list.append(OctTreeNode(oct_6_min, oct_6_max, dl=dl, parent=self))
 
         oct_7_min = (half_x, half_y, half_z) #111
-        oct_7_max = node.bp_max
+        oct_7_max = self.bp_max
         octant_list.append(OctTreeNode(oct_7_min, oct_7_max, dl=dl, parent=self))
 
         # Remove the original node and add the octants
