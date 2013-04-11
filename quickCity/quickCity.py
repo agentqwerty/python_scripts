@@ -16,11 +16,16 @@ faces on.
 """
 
 # Globals
+PROGRESS_WINDOW = False
 ANTENNA_CHANCE = 0.6
 SPAWN_CHANCE = 0.1
 
 # Seed those randoms!
 random.seed(256)
+
+# Exceptions
+class QuickCityError(Exception):pass
+class InvalidExtrusionError(QuickCityError):pass
 
 # Classes
 class CityBlock(object):
@@ -29,14 +34,19 @@ class CityBlock(object):
     a single plane. Contains methods for creating a single building, and for
     creating multiple buildings from a mesh.
     """
-    def __init__(self, name, parent, faceList, 
-            minHeight, maxHeight, minLevels, maxLevels):
+    def __init__(self, name, sourcePlane=None, targetMesh=None, 
+            buildType='mesh', minHeight=1, maxHeight=5, minLevels=1, 
+            maxLevels=5, faceList=[], spawnChance=SPAWN_CHANCE):
         """
         @param name string
             The name of the block. Determines the group name in Maya.
 
-        @param parent string
-            The name of the parent mesh.
+        @param sourcePlane string
+           The plane that will be duplicated if the 'plane' buildType is 
+           selected. 
+
+        @param targetMesh string
+            The 
 
         @param minHeight float
             The minimum height of a building.
@@ -52,14 +62,62 @@ class CityBlock(object):
         """
         self.name = name
         self.centerFace = cmds.ls(sl=True, fl=True)[0]
-        self.parentPlane = parent
-        self.faceList = faceList
+        self.sourcePlane = sourcePlane
+        self.targetMesh = targetMesh
+
+        # Determine which faces to create buildings on.
+        if not (targetMesh or faceList):
+            raise QuickCityError("A targetMesh or faceList must be supplied")
+        if not faceList:
+            faceList = cmds.polyListComponentConversion(targetMesh, tf=True)
+            self.faceList = cmds.ls(faceList, fl=True)
+
         self.parentMesh = getParentMesh(self.faceList[0])
         self.faceDistances = getFaceDistances(self.centerFace, self.faceList)
         self.maxDistance = max(self.faceDistances.values())
-        self.heightRange = range(minHeight, maxHeight)
+        self.minHeight = minHeight
+        self.maxHeight = maxHeight
         self.levelRange = range(minLevels, maxLevels)
         self.dropRate = SPAWN_CHANCE
+
+    # Extrude Presets
+    def getFaces(self):
+        """
+        Returns a list of currently selected faces.
+        """
+        faces = cmds.ls(sl=True, fl=True)
+        return faces
+
+    def makeSidewalk(self, face, walkHeight):
+        """
+        Creates a sidewalk from the given face of height walkHeight.
+        """
+        extrudeList(face, ['up'], [walkHeight], [])
+
+    def makeRim(self, face, rimHeight):
+        """
+        Creates a building rim on face of height rimHeight
+        """
+        extrudeList(face, ['out', 'up', 'in', 'down', 'in'], 
+                [rimHeight, rimHeight*0.25], [1.05, 0.95, 0.95])
+
+    def makeWell(self, face, wellDepth):
+        """
+        Creates a building well on face of depth wellDepth
+        """
+        extrudeList(face, ['in', 'down', 'in'], [wellDepth], [0.95, 0.95])
+
+    def makeIndent(self, face, indentDepth):
+        """
+        Creates an indent in face of depth indentDepth.
+        """
+        extrudeList(face, ['in','up'], [indentDepth], [0.95])
+
+    def makeAntenna(self, face, antennaHeight):
+        """
+        Creates an antenna on face of height antennaHeight.
+        """
+        extrudeList(face, ['in', 'antenna'], [antennaHeight], [0.05])
 
     def makeBuilding(self, face, levels, height, sidewalkHeight):
         """
@@ -91,25 +149,26 @@ class CityBlock(object):
 
             # Add a preset.
             if presetType == 'indent':
-                makeIndent(face, hl/10.0)
+                self.makeIndent(face, hl/10.0)
             if presetType == 'rim':
-                makeRim(face, hl/10.0)
+                self.makeRim(face, hl/10.0)
             if presetType == 'well':
-                makeWell(face, hl/30.0)
+                self.makeWell(face, hl/30.0)
 
             # If we're at the top level, add an antenna.
             if(i == levels-1 and random.random() > ANTENNA_CHANCE):
-                makeAntenna(face, dHeight/2.0)
+                self.makeAntenna(face, dHeight/2.0)
 
     def buildMesh(self):
         """
         Creates buildings on selected faces with probability 1-dropRate.
         """
-        sidewalkHeight = max(self.heightRange)/160.0
+        sidewalkHeight = self.maxHeight/160.0
         i = 0
         for f in self.faceList:
             if random.random() >= self.dropRate:
-                height = 1.0*random.choice(self.heightRange)
+                height = self.minHeight +\
+                         random.random()*(self.maxHeight-self.minHeight)
                 levels = random.choice(self.levelRange)
                 self.makeBuilding(f, levels, height, sidewalkHeight)
             if not updateProgressWindow(i, len(self.faceList)):
@@ -118,27 +177,29 @@ class CityBlock(object):
             cmds.delete(self.parentMesh, constructionHistory=True)
         killProgressWindow()
 
-
     def buildPlanes(self):
         """
         Creates buildings on new planes with probability of 1-SPAWN_CHANCE
         """
         buildings = []
         i = 0
-        sidewalkHeight = max(self.heightRange)/160.0
-        for f in self.faceListj:
+        sidewalkHeight = self.maxHeight/160.0
+        for f in self.faceList:
             if(random.random() >= self.dropRate):
-                height = 1.0*random.choice(self.heightRange)
+                height = self.minHeight +\
+                         random.random()*(self.maxHeight-self.minHeight)
                 levels = random.choice(self.levelRange)
+
                 #get the midpoint of the current face
                 verts = makeVertList(cmds.xform(f, q=True, t=True))
                 midpoint = getMidpoint(verts, True)
+
                 #make a duplicate of the parent plane
-                cmds.select(self.parentPlane)
                 dupName = self.name + "building_"+str(i)
                 dupFace = dupName + ".f[0]"
-                cmds.duplicate(name=dupName)
+                cmds.duplicate(self.sourcePlane, name=dupName)
                 cmds.xform(t=midpoint)
+
                 #create building and add it to building list
                 self.makeBuilding(dupFace, levels, height, sidewalkHeight)
                 buildings += [dupName]
@@ -165,21 +226,21 @@ def getMax(vertList, index):
     """
     Given a list of vertices, gets the maximum x,y, or z value
     """
-    max = -sys.maxint
+    curMax = -sys.maxint
     for v in vertList:
-        if v[index] > max:
-            max = v[index]
-    return max
+        if v[index] > curMax:
+            curMax = v[index]
+    return curMax
 
 def getMin(vertList, index):
     """
     Given a list of vertices, gets the minimum x,y, or z value
     """
-    min = sys.maxint
+    curMin = sys.maxint
     for v in vertList:
-        if v[index] < min:
-            min = v[index]
-    return min
+        if v[index] < curMin:
+            curMin = v[index]
+    return curMin
 
 def getMidpoint(vertList, useMinZ):
     """
@@ -236,48 +297,6 @@ def makeVertList(numList):
         vertList += [vert]
         i += 3
     return vertList
-
-
-#********************************************************
-# EXTRUDE PRESETS                                       |
-#********************************************************
-def getFaces():
-    """
-    Returns a list of currently selected faces.
-    """
-    faces = cmds.ls(sl=True, fl=True)
-    return faces
-
-def makeSidewalk(face, walkHeight):
-    """
-    Creates a sidewalk from the given face of height walkHeight.
-    """
-    extrudeList(face, ['up'], [walkHeight], [])
-
-def makeRim(face, rimHeight):
-    """
-    Creates a building rim on face of height rimHeight
-    """
-    extrudeList(face, ['out', 'up', 'in', 'down', 'in'], [rimHeight, rimHeight*0.25], [1.05, 0.95, 0.95])
-
-def makeWell(face, wellDepth):
-    """
-    Creates a building well on face of depth wellDepth
-    """
-    extrudeList(face, ['in', 'down', 'in'], [wellDepth], [0.95, 0.95])
-
-def makeIndent(face, indentDepth):
-    """
-    Creates an indent in face of depth indentDepth.
-    """
-    extrudeList(face, ['in','up'], [indentDepth], [0.95])
-
-def makeAntenna(face, antennaHeight):
-    """
-    Creates an antenna on face of height antennaHeight.
-    """
-    extrudeList(face, ['in', 'antenna'], [antennaHeight], [0.05])
-
 
 #********************************************************
 # SHADER FUNCTIONS                                      |
@@ -348,9 +367,6 @@ def extrudeList(face, extrudes, heights, scales):
         else:
             print "e was not a valid extrude type"
 
-
-#creates buildings on new planes with probablity 1-droprate
-
 #********************************************************
 # UI FUNCTIONS                                          |
 #********************************************************
@@ -358,7 +374,7 @@ def initializeProgressWindow(t, maxSize):
     cmds.progressWindow(title=t, progress=0, max=maxSize, isInterruptable=True)
 
 def updateProgressWindow(i, maxSize):
-    if(cmds.progressWindow(q=True, ic=True)):
+    if cmds.progressWindow(q=True, ic=True):
         return False
     else:
         cmds.progressWindow(e=True, pr=i, st=("Building: " +
@@ -373,6 +389,56 @@ def killProgressWindow():
 #********************************************************
 # TESTING FUNCTIONS                                     |
 #********************************************************
+def squaredDistanceBetween(v1, v2): 
+    """
+    Get the distance between v1 and v2 squared. We can use squared distance
+    with comparisons to avoid having to do the square root.
+    """
+    l1 = cmds.xform(v1, q=True, t=True)
+    l2 = cmds.xform(v2, q=True, t=True)
+    x1,y1,z1 = l1
+    x2,y2,z2 = l2
+    return (x1-x2)**2+(y1-y2)**2+(z1-z2)**2
+
+def avgEdgeLength(mesh):
+    """
+    Calculates the average edge length of a mesh.
+    """
+    avg = 0
+    n = 1
+    edges = cmds.polyListComponentConversion(mesh, te=True)
+    edges = cmds.ls(edges, fl=True)
+    for edge in edges:
+        verts = cmds.polyListComponentConversion(edge, tv=True)
+        verts = cmds.ls(verts, fl=True)
+        sample = squaredDistanceBetween(verts[0], verts[1])
+        avg = ((n-1)*avg + sample)/n
+        n += 1
+
+    return avg
+
+def quickTest(testType='mesh'):
+    targetMesh = cmds.ls(sl=True)[0]
+    if testType == 'mesh':
+        testMesh(0.1, targetMesh)
+    else:
+        sourcePlane = cmds.polyChipOff('%s.f[0]'%targetMesh, duplicate=True)
+        testPlanes(0.1, sourcePlane, targetMesh)
+
+def testPlanes(spawnChance, plane, target):
+    avLen = avgEdgeLength(target)
+    cb = CityBlock('testBlockPlanes', plane, target, 'plane', minHeight=avLen,
+            maxHeight=5.0*avLen)
+    initializeProgressWindow("Building Planes", len(cb.faceList))
+    cb.buildPlanes()
+
+def testMesh(spawnChance, target):
+    avLen = avgEdgeLength(target)
+    cb = CityBlock('testBlockMesh', None, target, 'mesh', minHeight=avLen,
+            maxHeight=5.0*avLen)
+    initializeProgressWindow("Building Mesh", len(cb.faceList))
+    cb.buildMesh()
+
 """def testPlanes(dropRate,plane):
     blah = cityBlock("blah")
     blah.setup(plane, 0.1)
