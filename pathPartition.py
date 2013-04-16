@@ -2,7 +2,7 @@ import os, sys, shutil
 from optparse import OptionParser
 
 def parse_args():
-    parser = OptionParser(usage='>optparse -p <path> -n <num partitions>')
+    parser = OptionParser(usage='>pathPartition -p <path> -n <num partitions>')
     
     parser.add_option('-p', '--path', dest='path', action='store',
                       default='.')
@@ -36,7 +36,6 @@ def get_partition_bounds(partition, partition_num):
     except IndexError:
         print "Unable to get partition bounds"
         return '%s' % partition_num
-
     
 
 def main():
